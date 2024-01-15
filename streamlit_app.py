@@ -1,40 +1,120 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import torchaudio
+import torch
+import whisper
+from transformers import Wav2Vec2FeatureExtractor, HubertForSequenceClassification
+import numpy as np
+import sounddevice as sd
+# import numpy as np
+from pydub import AudioSegment
+# import io
 
-"""
-# Welcome to Streamlit!
+language_model = whisper.load_model("medium")
+emotion_model = HubertForSequenceClassification.from_pretrained(
+    "xbgoose/hubert-speech-emotion-recognition-russian-dusha-finetuned")
+emotion_model.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/hubert-large-ls960-ft")
+emotion_model.num2emotion = {0: 'neutral', 1: 'angry', 2: 'positive', 3: 'sad', 4: 'other'}
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+st.title("Распознавание речи и эмоций")
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+audio_file = st.file_uploader("Выберите аудиофайл", type=["wav", "mp3"])
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+duration = st.slider("Выберите продолжительность записи (секунды):", 1, 10, 3)
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+start_recording = st.button("Начать запись")
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+if start_recording:
+    st.info("Запись...")
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
+    audio_data = sd.rec(int(duration * 16000), samplerate=16000, channels=1, dtype=np.int16)
+    sd.wait()
 
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+    st.success("Запись завершена!")
+
+    audio_segment = AudioSegment(
+        audio_data.tobytes(),
+        frame_rate=16000,
+        sample_width=audio_data.dtype.itemsize,
+        channels=1
+    )
+
+    audio_bytes = audio_segment.export(format="wav").read()
+
+    st.audio(audio_bytes, format="audio/wav")
+    audio_array = np.array(audio_segment.get_array_of_samples())
+    waveform = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0)
+    transform = torchaudio.transforms.Resample(16000, 16000)
+    waveform = transform(waveform)
+
+    inputs = emotion_model.feature_extractor(
+        waveform,
+        sampling_rate=emotion_model.feature_extractor.sampling_rate,
+        return_tensors="pt",
+        padding=True,
+        max_length=16000 * 10,
+        truncation=True
+    )
+
+    inputs['input_values'] = inputs['input_values'].view(1, 1, -1)
+
+    logits = emotion_model(inputs['input_values'][0]).logits
+    predictions = torch.argmax(logits, dim=-1)
+    predicted_emotion = emotion_model.num2emotion[predictions.numpy()[0]]
+
+    st.write("Предсказанная эмоция: ", predicted_emotion)
+
+    waveform = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0)
+
+    transform = torchaudio.transforms.Resample(16000, 16000)
+    waveform = transform(waveform)
+
+    waveform = whisper.pad_or_trim(waveform)
+
+    mel = whisper.log_mel_spectrogram(waveform).to(language_model.device)
+
+    languages = language_model.detect_language(mel)
+    probs = {str(i): prob for i, prob in enumerate(languages)}
+    max_language = max(probs["1"][0], key=lambda x: probs["1"][0][x])
+    st.write("Язык: ", max_language)
+
+    options = whisper.DecodingOptions(fp16=False)
+    result = whisper.decode(language_model, mel, options)
+
+    transcripted_text = result[0].text
+    st.write("Распознанный текст: ", transcripted_text)
+
+if audio_file:
+    waveform, sample_rate = torchaudio.load(audio_file, normalize=True, num_frames=int(duration * 16000))
+    st.audio(audio_file, format="audio/wav")
+    waveform, sample_rate = torchaudio.load(audio_file, normalize=True, num_frames=int(duration * 16000))
+    transform = torchaudio.transforms.Resample(sample_rate, 16000)
+    waveform = transform(waveform)
+
+    inputs = emotion_model.feature_extractor(
+        waveform,
+        sampling_rate=emotion_model.feature_extractor.sampling_rate,
+        return_tensors="pt",
+        padding=True,
+        max_length=16000 * 10,
+        truncation=True
+    )
+
+    logits = emotion_model(inputs['input_values'][0]).logits
+    predictions = torch.argmax(logits, dim=-1)
+    predicted_emotion = emotion_model.num2emotion[predictions.numpy()[0]]
+
+    st.write("Предсказанная эмоция: ", predicted_emotion)
+
+    audio = whisper.load_audio(audio_file)
+    audio = whisper.pad_or_trim(audio)
+    mel = whisper.log_mel_spectrogram(audio).to(language_model.device)
+
+    _, probs = language_model.detect_language(mel)
+    language = max(probs, key=probs.get)
+    st.write("Язык: ", language)
+
+    options = whisper.DecodingOptions(fp16=False)
+    result = whisper.decode(language_model, mel, options)
+    transcripted_text = result.text
+
+    st.write("Распознанный текст: ", transcripted_text)
