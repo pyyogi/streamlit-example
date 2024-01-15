@@ -6,6 +6,7 @@ from transformers import Wav2Vec2FeatureExtractor, HubertForSequenceClassificati
 import numpy as np
 import sounddevice as sd
 from pydub import AudioSegment
+import io
 
 language_model = whisper.load_model("medium")
 emotion_model = HubertForSequenceClassification.from_pretrained(

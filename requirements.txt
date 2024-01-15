@@ -8,3 +8,4 @@ numpy
 sounddevice
 pydub
 whisper
+ffmpeg-python
