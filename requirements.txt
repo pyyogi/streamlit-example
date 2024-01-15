@@ -1,3 +1,10 @@
 altair
 pandas
 streamlit
+torchaudio
+torch
+transformers
+numpy
+sounddevice
+pydub
+whisper
