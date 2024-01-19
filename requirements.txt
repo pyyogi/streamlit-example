@@ -7,5 +7,5 @@ transformers
 numpy
 streamlit-audiorecorder
 pydub
-whisper
+openai-whisper
 ffmpeg-python

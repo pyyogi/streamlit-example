@@ -19,25 +19,27 @@ st.title("Распознавание речи и эмоций")
 
 audio_file = st.file_uploader("Выберите аудиофайл", type=["wav", "mp3"])
 
-# duration = st.slider("Выберите продолжительность записи (секунды):", 1, 10, 3)
+duration = st.slider("Выберите продолжительность записи (секунды):", 1, 10, 3)
 
-start_recording = st.button("Начать запись")
+# start_recording = st.button("Запись голоса")
+# #
+# if start_recording:
+#     st.info("Запись...")
 
-if start_recording:
-    st.info("Запись...")
+# audio_data = sd.rec(int(duration * 16000), samplerate=16000, channels=1, dtype=np.int16)
+audio_segment = audiorecorder("Начать запись", "Закончить запись")
+# audio_segment.wait()
 
-    # audio_data = sd.rec(int(duration * 16000), samplerate=16000, channels=1, dtype=np.int16)
-    audio_data = audiorecorder("Начать запись", "Закончить запись")
-    audio_data.wait()
+# st.success("Запись завершена!")
 
-    st.success("Запись завершена!")
 
-    audio_segment = AudioSegment(
-        audio_data.tobytes(),
-        frame_rate=16000,
-        sample_width=audio_data.dtype.itemsize,
-        channels=1
-    )
+if len(audio_segment) > 0:
+    # audio_segment = AudioSegment(
+    #     audio_segment.tobytes(),
+    #     frame_rate=audio_segment.frame_rate,
+    #     sample_width=audio_segment.dtype.itemsize,
+    #     channels=1
+    # )
 
     audio_bytes = audio_segment.export(format="wav").read()
 
