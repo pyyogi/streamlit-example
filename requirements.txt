@@ -5,7 +5,7 @@ torchaudio
 torch
 transformers
 numpy
-sounddevice
+streamlit-audiorecorder
 pydub
 whisper
 ffmpeg-python
